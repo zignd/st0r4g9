@@ -1,0 +1,27 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # The v2 "standard" set: errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    - misspell
+
+  settings:
+    errcheck:
+      # Deferred/cleanup Close() calls on read-only handles can't meaningfully
+      # fail in a way we'd act on; don't flag them.
+      exclude-functions:
+        - (*database/sql.Rows).Close
+        - (*database/sql.Stmt).Close
+        - (*os.File).Close
+        - (*github.com/zignd/st0r4g9/internal/store.Store).Close
+
+  exclusions:
+    rules:
+      # Tests routinely ignore cleanup/teardown errors.
+      - path: _test\.go
+        linters:
+          - errcheck
