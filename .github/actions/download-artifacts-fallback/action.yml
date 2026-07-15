@@ -1,0 +1,104 @@
+name: Download artifacts with st0r4g9 fallback
+description: >-
+  Download build artifacts via actions/download-artifact, then pull any that
+  were diverted to an st0r4g9 object store (typically reached over ngrok)
+  because GitHub's Actions artifact storage quota was exhausted during upload.
+  Files pulled from the fallback land in "<path>/_fallback/" and are
+  deduplicated by basename against whatever GitHub artifacts already provided.
+  Configure it by setting the ST0R4G9_URL repository variable and the
+  ST0R4G9_API_KEY repository secret and passing them as inputs. See
+  .github/actions/README.md for full usage.
+
+inputs:
+  pattern:
+    description: Artifact name pattern for actions/download-artifact.
+    required: false
+    default: "*"
+  path:
+    description: Directory to download artifacts into.
+    required: false
+    default: artifacts/release
+  fallback-url:
+    description: >-
+      st0r4g9 base URL (typically the ngrok https URL). Leave empty to rely on
+      GitHub artifacts only.
+    required: false
+    default: ""
+  fallback-key:
+    description: st0r4g9 API key (Bearer token, "st0r_..."). Empty disables the fallback.
+    required: false
+    default: ""
+  fallback-bucket:
+    description: st0r4g9 bucket that stores the artifacts. Override per project.
+    required: false
+    default: ci-artifacts
+  fallback-prefix:
+    description: Object-key prefix within the bucket (defaults to the tag/ref name).
+    required: false
+    default: ${{ github.ref_name }}
+
+runs:
+  using: composite
+  steps:
+    - name: Download artifacts (GitHub)
+      id: gh-download
+      continue-on-error: true
+      uses: actions/download-artifact@v4
+      with:
+        pattern: ${{ inputs.pattern }}
+        path: ${{ inputs.path }}
+
+    - name: Download artifacts (st0r4g9 fallback)
+      shell: bash
+      env:
+        FALLBACK_URL: ${{ inputs.fallback-url }}
+        FALLBACK_KEY: ${{ inputs.fallback-key }}
+        FALLBACK_BUCKET: ${{ inputs.fallback-bucket }}
+        FALLBACK_PREFIX: ${{ inputs.fallback-prefix }}
+        DEST_PATH: ${{ inputs.path }}
+      run: |
+        set -euo pipefail
+
+        if [[ -z "$FALLBACK_URL" || -z "$FALLBACK_KEY" ]]; then
+          echo "No st0r4g9 fallback configured; relying on GitHub artifacts only."
+          exit 0
+        fi
+
+        base="${FALLBACK_URL%/}"
+        auth=(-H "Authorization: Bearer $FALLBACK_KEY" -H "ngrok-skip-browser-warning: true")
+        mkdir -p "$DEST_PATH/_fallback"
+
+        # Basenames already provided by GitHub artifacts, for dedup. (The
+        # _fallback dir was just created and is still empty.)
+        present="$(find "$DEST_PATH" -type f -exec basename {} \; | sort -u)"
+
+        # List the fallback objects for this release. A 404 means the bucket was
+        # never created (the fallback was never needed) — nothing to pull.
+        body="$(mktemp)"
+        code="$(curl -sS -o "$body" -w '%{http_code}' "${auth[@]}" "$base/$FALLBACK_BUCKET?prefix=$FALLBACK_PREFIX/")"
+        if [[ "$code" == "404" ]]; then
+          echo "No st0r4g9 fallback bucket/objects for this release; nothing to pull."
+          exit 0
+        fi
+        if [[ "$code" != "200" ]]; then
+          echo "::error::Failed to list st0r4g9 fallback objects (HTTP $code)." >&2
+          cat "$body" >&2 || true
+          exit 1
+        fi
+
+        mapfile -t keys < <(jq -r '(.objects // [])[].key' "$body")
+
+        pulled=0
+        for key in "${keys[@]}"; do
+          [[ -z "$key" ]] && continue
+          name="$(basename "$key")"
+          if grep -qxF "$name" <<< "$present"; then
+            echo "Skipping '$name' (already downloaded from GitHub artifacts)."
+            continue
+          fi
+          echo "Pulling '$key' from the st0r4g9 fallback store."
+          curl -fsS "${auth[@]}" "$base/$FALLBACK_BUCKET/$key" -o "$DEST_PATH/_fallback/$name"
+          pulled=$((pulled + 1))
+        done
+
+        echo "Pulled $pulled file(s) from the st0r4g9 fallback store."

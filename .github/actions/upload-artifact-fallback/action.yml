@@ -1,0 +1,112 @@
+name: Upload artifact with st0r4g9 fallback
+description: >-
+  Upload a build artifact via actions/upload-artifact, falling back to an
+  st0r4g9 object store (typically reached over ngrok) when GitHub's Actions
+  artifact storage quota is exhausted ("Artifact storage quota has been hit").
+  The fallback only runs when the GitHub upload actually fails, so the happy
+  path is unchanged. Configure it by setting the ST0R4G9_URL repository variable
+  and the ST0R4G9_API_KEY repository secret and passing them as inputs. See
+  .github/actions/README.md for full usage.
+
+inputs:
+  name:
+    description: GitHub Actions artifact name.
+    required: true
+  path:
+    description: >-
+      A single file or a directory of files to upload. Globs are not expanded by
+      the fallback path, so pass a concrete file/dir.
+    required: true
+  if-no-files-found:
+    description: Passed through to actions/upload-artifact.
+    required: false
+    default: error
+  fallback-url:
+    description: >-
+      st0r4g9 base URL (typically the ngrok https URL). Leave empty to disable
+      the fallback; if the GitHub upload then fails, the step fails loudly.
+    required: false
+    default: ""
+  fallback-key:
+    description: st0r4g9 API key (Bearer token, "st0r_..."). Empty disables the fallback.
+    required: false
+    default: ""
+  fallback-bucket:
+    description: st0r4g9 bucket that stores the artifacts. Override per project.
+    required: false
+    default: ci-artifacts
+  fallback-prefix:
+    description: Object-key prefix within the bucket (defaults to the tag/ref name).
+    required: false
+    default: ${{ github.ref_name }}
+
+runs:
+  using: composite
+  steps:
+    - name: Upload artifact (GitHub)
+      id: gh-upload
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        if-no-files-found: ${{ inputs.if-no-files-found }}
+
+    - name: Upload artifact (st0r4g9 fallback)
+      if: steps.gh-upload.outcome == 'failure'
+      shell: bash
+      env:
+        FALLBACK_URL: ${{ inputs.fallback-url }}
+        FALLBACK_KEY: ${{ inputs.fallback-key }}
+        FALLBACK_BUCKET: ${{ inputs.fallback-bucket }}
+        FALLBACK_PREFIX: ${{ inputs.fallback-prefix }}
+        ARTIFACT_PATH: ${{ inputs.path }}
+      run: |
+        set -euo pipefail
+
+        echo "::warning::GitHub artifact upload failed (likely the storage quota); attempting the st0r4g9 fallback."
+
+        if [[ -z "$FALLBACK_URL" || -z "$FALLBACK_KEY" ]]; then
+          echo "::error::GitHub artifact upload failed and no st0r4g9 fallback is configured. Set the ST0R4G9_URL repository variable and the ST0R4G9_API_KEY repository secret to enable it." >&2
+          exit 1
+        fi
+
+        base="${FALLBACK_URL%/}"
+
+        # Resolve the concrete file list from the path input: a single file, or
+        # every file under a directory. Globs are intentionally not expanded.
+        files=()
+        if [[ -f "$ARTIFACT_PATH" ]]; then
+          files+=("$ARTIFACT_PATH")
+        elif [[ -d "$ARTIFACT_PATH" ]]; then
+          while IFS= read -r f; do
+            files+=("$f")
+          done < <(find "$ARTIFACT_PATH" -type f)
+        fi
+
+        if [[ "${#files[@]}" -eq 0 ]]; then
+          echo "::error::No files found at '$ARTIFACT_PATH' to upload to the fallback store." >&2
+          exit 1
+        fi
+
+        auth=(-H "Authorization: Bearer $FALLBACK_KEY" -H "ngrok-skip-browser-warning: true")
+
+        # Ensure the bucket exists. Creation returns 201; 409 means it is already
+        # there. Anything else is a real error.
+        code="$(curl -sS -o /dev/null -w '%{http_code}' -X PUT "${auth[@]}" "$base/$FALLBACK_BUCKET")"
+        if [[ "$code" != "201" && "$code" != "409" ]]; then
+          echo "::error::Failed to ensure fallback bucket '$FALLBACK_BUCKET' (HTTP $code)." >&2
+          exit 1
+        fi
+
+        for f in "${files[@]}"; do
+          name="$(basename "$f")"
+          key="$FALLBACK_PREFIX/$name"
+          echo "Uploading '$f' -> $FALLBACK_BUCKET/$key"
+          curl -fsS -X PUT "${auth[@]}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @"$f" \
+            "$base/$FALLBACK_BUCKET/$key" > /dev/null
+        done
+
+        echo "Uploaded ${#files[@]} file(s) to the st0r4g9 fallback store under prefix '$FALLBACK_PREFIX/'."

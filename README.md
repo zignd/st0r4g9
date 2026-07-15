@@ -188,6 +188,16 @@ Covers the store (CRUD + per-key isolation), auth (key gen/hash + middleware),
 the blob store (write/read/delete, hashing, empty objects), and full HTTP
 integration (happy path, error codes, cross-namespace isolation).
 
+## CI artifact fallback (GitHub Actions)
+
+`.github/actions/` ships two reusable composite actions that use st0r4g9 as a
+drop-in fallback for GitHub's Actions artifact storage, so a release pipeline
+keeps working when the artifact **storage quota** is exhausted. They wrap
+`actions/upload-artifact` / `actions/download-artifact` and only divert to
+st0r4g9 when GitHub's own storage fails. See
+[`.github/actions/README.md`](.github/actions/README.md) for setup and usage in
+another repo.
+
 ## Scope
 
 Deliberately omitted for simplicity: multipart uploads, versioning, presigned
