@@ -1,0 +1,55 @@
+# st0r4g9 in containers: our server + the official ngrok agent.
+#
+# Both bind mounts come from the host (paths supplied by the `make docker-tunnel`
+# target): the data dir (so dropping the containers never loses data) and the
+# ngrok config (so the tunnel authenticates with your host's ngrok token).
+
+services:
+  server:
+    build: .
+    environment:
+      ST0R4G9_ADDR: ":9000"
+      ST0R4G9_DB: "/data/store.db"
+      ST0R4G9_DATA_DIR: "/data/blobs"
+      ST0R4G9_LOG_LEVEL: "${ST0R4G9_LOG_LEVEL:-info}"
+      ST0R4G9_LOG_FORMAT: "${ST0R4G9_LOG_FORMAT:-text}"
+    volumes:
+      - type: bind
+        source: ${DATA_DIR:-./data}
+        target: /data
+    ports:
+      # Also published to the host for local access; the public entry is ngrok.
+      - "${SERVER_PORT:-9000}:9000"
+    restart: unless-stopped
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    # Run as root so the agent can read the host's ngrok config even when it is
+    # mode 0600 (owned by your host user).
+    user: root
+    depends_on:
+      - server
+    # ngrok merges multiple --config files: the host one supplies the authtoken;
+    # web.yml only exposes the inspector on 0.0.0.0 so the host can reach :4040.
+    command:
+      - http
+      - server:9000
+      - --config=/etc/ngrok/ngrok.yml
+      - --config=/etc/ngrok/web.yml
+      - --log=stdout
+      - --log-format=logfmt
+    volumes:
+      - type: bind
+        # Real path is supplied by `make docker-tunnel`; the default is only a
+        # placeholder so `docker compose down`/`ps` don't require the variable.
+        source: ${NGROK_CONFIG:-./ngrok.yml}
+        target: /etc/ngrok/ngrok.yml
+        read_only: true
+      - type: bind
+        source: ./deploy/ngrok/web.yml
+        target: /etc/ngrok/web.yml
+        read_only: true
+    ports:
+      # ngrok's web inspector — open http://localhost:4040 to see the public URL.
+      - "${NGROK_INSPECTOR_PORT:-4040}:4040"
+    restart: unless-stopped

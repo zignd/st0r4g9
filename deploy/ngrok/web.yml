@@ -1,0 +1,6 @@
+# Overlay merged on top of the host's ngrok.yml (which carries the authtoken).
+# It only binds the web inspector to all interfaces so it is reachable from the
+# host at http://localhost:4040. The host config is never modified.
+version: "3"
+agent:
+    web_addr: 0.0.0.0:4040

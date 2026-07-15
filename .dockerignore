@@ -1,0 +1,11 @@
+.git
+.github
+bin
+data
+docker-data
+*.db
+*.db-shm
+*.db-wal
+coverage.out
+bruno
+*.md
