@@ -36,3 +36,4 @@ go.work.sum
 /data/
 /docker-data/
 store.db*
+bruno/environments/Ngrok.bru
