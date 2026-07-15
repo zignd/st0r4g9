@@ -1,0 +1,22 @@
+meta {
+  name: List Objects
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/{{bucket}}?prefix=folder/&delimiter=/
+  body: none
+  auth: inherit
+}
+
+params:query {
+  prefix: folder/
+  delimiter: /
+}
+
+docs {
+  Lists objects in the bucket. `prefix` filters by key prefix; `delimiter` (e.g.
+  "/") folds keys that share a segment into `commonPrefixes`, mimicking folders.
+  Drop the params to list everything.
+}

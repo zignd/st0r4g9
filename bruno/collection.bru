@@ -1,0 +1,17 @@
+auth {
+  mode: bearer
+}
+
+auth:bearer {
+  token: {{apiKey}}
+}
+
+docs {
+  # st0r4g9
+
+  A simplified, S3-flavored object store. Run `Create API Key` first — its
+  post-response script stores the returned key into the `apiKey` environment
+  variable, and every other request inherits `Authorization: Bearer {{apiKey}}`
+  from this collection. Then walk the requests top to bottom (they are ordered
+  via `seq`): create a bucket, put an object, get/list/query it, then clean up.
+}

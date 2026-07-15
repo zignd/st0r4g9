@@ -1,0 +1,16 @@
+meta {
+  name: Create Bucket
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/{{bucket}}
+  body: none
+  auth: inherit
+}
+
+docs {
+  Creates a bucket in the caller's namespace. 409 if the caller already owns a
+  bucket with this name. Names are 3-63 chars: lowercase letters, digits, '-', '.'.
+}

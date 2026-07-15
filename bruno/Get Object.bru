@@ -1,0 +1,16 @@
+meta {
+  name: Get Object
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/{{bucket}}/{{objectKey}}
+  body: none
+  auth: inherit
+}
+
+docs {
+  Streams the object bytes back. Response headers carry Content-Type, ETag,
+  Last-Modified, and the object's X-Str-Meta-* / X-Str-Annotation-* pairs.
+}

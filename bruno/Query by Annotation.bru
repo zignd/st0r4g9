@@ -1,0 +1,21 @@
+meta {
+  name: Query by Annotation
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/{{bucket}}?annotation.project=demo
+  body: none
+  auth: inherit
+}
+
+params:query {
+  annotation.project: demo
+}
+
+docs {
+  Filters objects by annotation. Each `annotation.<name>=<value>` query param
+  restricts results to objects carrying that annotation. Multiple params AND
+  together.
+}

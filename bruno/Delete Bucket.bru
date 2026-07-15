@@ -1,0 +1,20 @@
+meta {
+  name: Delete Bucket
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{baseUrl}}/{{bucket}}?force=true
+  body: none
+  auth: inherit
+}
+
+params:query {
+  force: true
+}
+
+docs {
+  Deletes the bucket. Without `force=true` a non-empty bucket returns 409; with
+  it, every contained object (row + blob) is removed too.
+}

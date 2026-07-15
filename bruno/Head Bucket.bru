@@ -1,0 +1,15 @@
+meta {
+  name: Head Bucket
+  type: http
+  seq: 4
+}
+
+head {
+  url: {{baseUrl}}/{{bucket}}
+  body: none
+  auth: inherit
+}
+
+docs {
+  200 if the bucket exists in the caller's namespace, 404 otherwise.
+}

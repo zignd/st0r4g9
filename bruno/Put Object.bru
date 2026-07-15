@@ -1,0 +1,28 @@
+meta {
+  name: Put Object
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/{{bucket}}/{{objectKey}}
+  body: text
+  auth: inherit
+}
+
+headers {
+  Content-Type: text/plain
+  X-Str-Meta-Author: igor
+  X-Str-Annotation-project: demo
+}
+
+body:text {
+  hello from st0r4g9 — slashes in the key create visual folders.
+}
+
+docs {
+  Creates or overwrites an object. The request body is the object's bytes.
+  `X-Str-Meta-*` headers become descriptive metadata; `X-Str-Annotation-*`
+  headers become queryable annotations. The response echoes the stored object
+  (size, contentType, etag, metadata, annotations).
+}

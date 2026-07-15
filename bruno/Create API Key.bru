@@ -1,0 +1,33 @@
+meta {
+  name: Create API Key
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api-keys
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "my first key"
+  }
+}
+
+script:post-response {
+  // Persist the freshly minted key so every other request authenticates.
+  if (res.getStatus() === 201 && res.getBody() && res.getBody().key) {
+    bru.setEnvVar("apiKey", res.getBody().key);
+  }
+}
+
+docs {
+  The only unauthenticated endpoint. Returns the raw `key` exactly once; the
+  post-response script saves it to the `apiKey` environment variable.
+}

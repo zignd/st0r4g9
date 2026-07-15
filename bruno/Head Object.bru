@@ -1,0 +1,16 @@
+meta {
+  name: Head Object
+  type: http
+  seq: 7
+}
+
+head {
+  url: {{baseUrl}}/{{bucket}}/{{objectKey}}
+  body: none
+  auth: inherit
+}
+
+docs {
+  Object metadata only (no body): Content-Length, Content-Type, ETag,
+  Last-Modified, and X-Str-Meta-* / X-Str-Annotation-* headers.
+}
